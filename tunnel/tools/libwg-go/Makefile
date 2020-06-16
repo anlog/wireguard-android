@@ -19,33 +19,11 @@ export CC := $(ANDROID_C_COMPILER)
 export GOARCH := $(NDK_GO_ARCH_MAP_$(ANDROID_ARCH_NAME))
 export GOOS := android
 export CGO_ENABLED := 1
-
-GO_VERSION := 1.14.4
-GO_PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')-$(NDK_GO_ARCH_MAP_$(shell uname -m))
-GO_TARBALL := go$(GO_VERSION).$(GO_PLATFORM).tar.gz
-GO_HASH_darwin-amd64 := 3fa7ed8dc44fdd50c0bfe72676250cceca527d59950aef20af906a670cf88de2
-GO_HASH_linux-amd64 := aed845e4185a0b2a3c3d5e1d0a35491702c55889192bb9c30e67a3de6849c067
+export GOPATH := $(CURDIR)/go
 
 default: $(DESTDIR)/libwg-go.so
 
-$(GRADLE_USER_HOME)/caches/golang/$(GO_TARBALL):
-	mkdir -p "$(dir $@)"
-	flock "$@.lock" -c ' \
-	[ -f "$@" ] && exit 0; \
-	curl -o "$@.tmp" "https://dl.google.com/go/$(GO_TARBALL)" && \
-	echo "$(GO_HASH_$(GO_PLATFORM))  $@.tmp" | sha256sum -c && \
-	mv "$@.tmp" "$@"'
-
-$(BUILDDIR)/go-$(GO_VERSION)/.prepared: $(GRADLE_USER_HOME)/caches/golang/$(GO_TARBALL)
-	mkdir -p "$(dir $@)"
-	flock "$@.lock" -c ' \
-	[ -f "$@" ] && exit 0; \
-	tar -C "$(dir $@)" --strip-components=1 -xzf "$^" && \
-	patch -p1 -f -N -r- -d "$(dir $@)" < goruntime-boottime-over-monotonic.diff && \
-	touch "$@"'
-
-$(DESTDIR)/libwg-go.so: export PATH := $(BUILDDIR)/go-$(GO_VERSION)/bin/:$(PATH)
-$(DESTDIR)/libwg-go.so: $(BUILDDIR)/go-$(GO_VERSION)/.prepared go.mod
+$(DESTDIR)/libwg-go.so: go.mod
 	go build -tags linux -ldflags="-X golang.zx2c4.com/wireguard/ipc.socketDirectory=/data/data/$(ANDROID_PACKAGE_NAME)/cache/wireguard" -v -trimpath -o "$@" -buildmode c-shared
 
 .DELETE_ON_ERROR:
